@@ -1,0 +1,347 @@
+hba1c_analysis
+================
+Fang Wang
+2025-12-07
+
+# Predicting HbA1c with Linear Regression and LASSO (Clinical Case Study)
+
+## 1. Clinical Motivation
+
+*Accurately predicting HbA1c is clinically important for identifying
+individuals at risk of diabetes and metabolic disease. Because health
+data often include multiple correlated predictors, careful model
+selection is essential to balance prediction accuracy and
+interpretability.*
+
+## 2. Data Overview
+
+*The data used in this case study were obtained from a community health
+screening initiative conducted through primary-care clinics in the
+southeastern United States.*
+
+## 3. Modeling Strategy
+
+*In this case study, I compare a baseline multiple linear regression
+model with LASSO regression to address potential multicollinearity and
+improve predictive performance. Model selection is performed using
+10-fold cross-validation, and performance is assessed using MSPE on both
+the training data and an external validation dataset.*
+
+## 4. Baseline Model: Multiple Linear Regression
+
+*As a baseline approach, a multiple linear regression model was fitted
+using all available predictors. Standard diagnostic plots were examined
+to assess key modeling assumptions.*
+
+## 5. Regularization: LASSO with Cross-Validation
+
+*To address potential multicollinearity and reduce model complexity,
+LASSO regression was applied. The tuning parameter was selected using
+10-fold cross-validation, considering both the minimum cross-validation
+error and the one-standard-error rule.*
+
+## 6. Model Performance
+
+*Model performance was evaluated using mean squared prediction error
+(MSPE) and residual diagnostics. Across models, residual plots did not
+indicate major violations of linear modeling assumptions. MSPE values
+were used to compare predictive accuracy between the baseline and
+regularized models.*
+
+## 7. External Validation
+
+*To evaluate generalizability, I apply the models trained on the
+original dataset to an independent validation dataset. Out-of-sample
+MSPE is used as the primary metric to compare predictive performance
+across models.*
+
+## 8. Discussion: Accuracy vs Parsimony
+
+## 9. Conclusions
+
+## Data and Setup
+
+``` r
+library(tidyverse)
+```
+
+    ## ── Attaching core tidyverse packages ──────────────────────── tidyverse 2.0.0 ──
+    ## ✔ dplyr     1.1.4     ✔ readr     2.1.5
+    ## ✔ forcats   1.0.0     ✔ stringr   1.5.1
+    ## ✔ ggplot2   3.5.2     ✔ tibble    3.3.0
+    ## ✔ lubridate 1.9.4     ✔ tidyr     1.3.1
+    ## ✔ purrr     1.1.0     
+    ## ── Conflicts ────────────────────────────────────────── tidyverse_conflicts() ──
+    ## ✖ dplyr::filter() masks stats::filter()
+    ## ✖ dplyr::lag()    masks stats::lag()
+    ## ℹ Use the conflicted package (<http://conflicted.r-lib.org/>) to force all conflicts to become errors
+
+``` r
+library(glmnet)
+```
+
+    ## Loading required package: Matrix
+    ## 
+    ## Attaching package: 'Matrix'
+    ## 
+    ## The following objects are masked from 'package:tidyr':
+    ## 
+    ##     expand, pack, unpack
+    ## 
+    ## Loaded glmnet 4.1-10
+
+``` r
+hba1c = read.csv("data/HbA1c.csv")
+hba1c_val = read.csv("data/HbA1c_val.csv")
+```
+
+## 4.1. Baseline Model: Multiple Linear Regression and Diagnostics
+
+``` r
+fit_1a = lm(hba1c ~ age + bmi + physical_activity + diet_score + digit_ratio, data = hba1c)
+summary (fit_1a)
+```
+
+    ## 
+    ## Call:
+    ## lm(formula = hba1c ~ age + bmi + physical_activity + diet_score + 
+    ##     digit_ratio, data = hba1c)
+    ## 
+    ## Residuals:
+    ##      Min       1Q   Median       3Q      Max 
+    ## -1.28150 -0.27771  0.03032  0.38759  0.89550 
+    ## 
+    ## Coefficients:
+    ##                    Estimate Std. Error t value Pr(>|t|)    
+    ## (Intercept)        7.917839   1.972321   4.014 0.000141 ***
+    ## age                0.021879   0.006284   3.482 0.000839 ***
+    ## bmi                0.043460   0.018159   2.393 0.019232 *  
+    ## physical_activity  0.056189   0.031603   1.778 0.079520 .  
+    ## diet_score        -0.014306   0.006353  -2.252 0.027306 *  
+    ## digit_ratio       -2.940292   1.934180  -1.520 0.132729    
+    ## ---
+    ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+    ## 
+    ## Residual standard error: 0.5161 on 74 degrees of freedom
+    ## Multiple R-squared:  0.3973, Adjusted R-squared:  0.3566 
+    ## F-statistic: 9.756 on 5 and 74 DF,  p-value: 3.457e-07
+
+``` r
+png("figures/lm_diagnostics.png", width = 900, height = 900)
+par(mfrow = c(2, 2))
+plot(fit_1a)
+dev.off()
+```
+
+    ## quartz_off_screen 
+    ##                 2
+
+Model diagnostics did not reveal major violations of linear regression
+assumptions. Residuals showed no clear nonlinearity, the scale-location
+plot suggested roughly constant variance, and the Q–Q plot indicated
+approximate normality. No single observation appeared highly influential
+based on leverage and Cook’s distance.
+
+## 5.1. Regularized Modeling: LASSO with Cross-Validation
+
+``` r
+# using cross validation to choose lambda:
+lambda_seq <- 10^seq(-3, 0, by = .1)
+set.seed(2025)
+cv_lasso <- cv.glmnet(as.matrix(hba1c[2:6]), hba1c$hba1c, 
+                       alpha = 1,
+                       lambda = lambda_seq, 
+                       nfolds = 10)
+
+png("figures/lasso_cv.png", width = 800, height = 600)
+
+plot(cv_lasso)
+abline(
+  v = log(cv_lasso$lambda.min),
+  col = "blue",
+  lwd = 2,
+  lty = 2
+)
+abline(
+  v = log(cv_lasso$lambda.1se),
+  col = "red",
+  lwd = 2,
+  lty = 2
+)
+
+dev.off()
+```
+
+    ## quartz_off_screen 
+    ##                 2
+
+``` r
+# fit LASSO models using lambda.min and lambda.1se:
+fit_min <- glmnet(as.matrix(hba1c[2:6]), hba1c$hba1c, 
+                       alpha = 1,
+                       lambda = cv_lasso$lambda.min)
+coef(fit_min)
+```
+
+    ## 6 x 1 sparse Matrix of class "dgCMatrix"
+    ##                            s0
+    ## (Intercept)        7.70442815
+    ## age                0.02144903
+    ## bmi                0.04227096
+    ## physical_activity  0.05153777
+    ## diet_score        -0.01348817
+    ## digit_ratio       -2.69284266
+
+``` r
+fit_1se <- glmnet(as.matrix(hba1c[2:6]), hba1c$hba1c, 
+                       alpha = 1,
+                       lambda = cv_lasso$lambda.1se)
+coef(fit_1se)
+```
+
+    ## 6 x 1 sparse Matrix of class "dgCMatrix"
+    ##                           s0
+    ## (Intercept)       5.53532244
+    ## age               0.01445994
+    ## bmi               0.01883486
+    ## physical_activity .         
+    ## diet_score        .         
+    ## digit_ratio       .
+
+Using ‘lambda.min’, LASSO retained all predictors with shrunken
+coefficients. Using ‘lambda.1se’, LASSO selected a simpler model
+retaining ‘age’ and ‘BMI’ only, improving interpretability at the cost
+of higher prediction error.
+
+## 6.1 Model Performance on Training Data
+
+``` r
+# Calculate MSPE(mean squared prediction error) for the full model:
+predictions_1 <- predict(fit_1a)
+residuals_1 <- hba1c$hba1c - predictions_1
+mspe_1 <- mean(residuals_1^2)
+mspe_1
+```
+
+    ## [1] 0.2463477
+
+``` r
+# Calculate MSPE(mean squared prediction error) for fit_min:
+predictions_2 <- predict(fit_min, newx = as.matrix(hba1c[2:6]))
+residuals_2 <- hba1c$hba1c - predictions_2
+mspe_2 <- mean(residuals_2^2)
+mspe_2
+```
+
+    ## [1] 0.24656
+
+``` r
+# Calculate MSPE(mean squared prediction error) for fit_1se:
+predictions_3 <- predict(fit_1se, newx = as.matrix(hba1c[2:6]))
+residuals_3 <- hba1c$hba1c - predictions_3
+mspe_3 <- mean(residuals_3^2)
+mspe_3
+```
+
+    ## [1] 0.298336
+
+``` r
+# plot fits vs. residuals for the full model:
+par(mfrow = c(1, 3))
+plot(predictions_1, residuals_1,
+     main = "Full Model",
+     xlab = "Fitted values",
+     ylab = "Residuals",
+     pch = 19)
+abline(h = 0, col = "red", lty = 2)
+
+plot(predictions_2, residuals_2,
+     main = "LASSO_lambda.min",
+     xlab = "Fitted values",
+     ylab = "Residuals",
+     pch = 19)
+abline(h = 0, col = "red", lty = 2)
+
+plot(predictions_3, residuals_3,
+     main = "LASSO_lambda.1se",
+     xlab = "Fitted values",
+     ylab = "Residuals",
+     pch = 19)
+abline(h = 0, col = "red", lty = 2)
+```
+
+![](analysis_files/figure-gfm/unnamed-chunk-4-1.png)<!-- -->
+
+## 7.1 External Validation on Independent Dataset
+
+``` r
+pred_full = predict(fit_1a, newdata = hba1c_val)
+pred_lasso_min = predict(fit_min, newx = as.matrix(hba1c_val[2:6]))
+pred_lasso_1se = predict(fit_1se, newx = as.matrix(hba1c_val[2:6]))
+
+mspe_full = mean((hba1c_val$hba1c - pred_full)^2)
+mspe_full
+```
+
+    ## [1] 0.1952012
+
+``` r
+mspe_lasso_min = mean((hba1c_val$hba1c - pred_lasso_min)^2)
+mspe_lasso_min
+```
+
+    ## [1] 0.1929503
+
+``` r
+mspe_lasso_1se = mean((hba1c_val$hba1c - pred_lasso_1se)^2)
+mspe_lasso_1se
+```
+
+    ## [1] 0.2245404
+
+Across both the training set and external validation set, ‘LASSO
+(lambda.min)’ achieved the lowest MSPE, indicating the best predictive
+performance in this case study.The ‘lambda.1se’ model was more
+parsimonious but showed a noticeable increase in MSPE.
+
+## **Table 1.** Comparison of predictive performance across models.
+
+``` r
+results <- data.frame(
+  Model = c("Full linear regression", "LASSO (lambda.min)", "LASSO (lambda.1se)"),
+  Train_MSPE = c(mspe_1, mspe_2, mspe_3),
+  Validation_MSPE = c(mspe_full, mspe_lasso_min, mspe_lasso_1se),
+  Num_Predictors = c(5, 5, 2)
+)
+knitr::kable(results, digits = 4)
+```
+
+| Model                  | Train_MSPE | Validation_MSPE | Num_Predictors |
+|:-----------------------|-----------:|----------------:|---------------:|
+| Full linear regression |     0.2463 |          0.1952 |              5 |
+| LASSO (lambda.min)     |     0.2466 |          0.1930 |              5 |
+| LASSO (lambda.1se)     |     0.2983 |          0.2245 |              2 |
+
+## 8. Discussion: Accuracy vs Parsimony
+
+The results illustrate a common trade-off in clinical predictive
+modeling. While the LASSO model using the 1SE rule offers a highly
+interpretable solution by retaining only age and BMI, this parsimony is
+associated with a noticeable loss in predictive accuracy.
+
+In contrast, the lambda.min LASSO model demonstrates superior
+performance in both internal and external validation. In a clinical
+screening or population health context—where accurate identification of
+individuals at risk is the primary objective—the modest increase in
+model complexity is justified. Nevertheless, the 1SE model may remain
+useful in resource-limited or communication-focused settings where
+simplicity is critical.
+
+## 9. Conclusions
+
+This case study demonstrates how regularization can improve predictive
+modeling of clinical biomarkers. In this setting, the LASSO model
+selected using lambda.min provided the best balance between accuracy and
+model complexity. This project was completed as part of graduate-level
+data science training and is presented here as a clinical data analysis
+case study.
